@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import api from '@/api/axios';
-import { Button } from '@/components/ui/button';
+import React, { useState, useEffect } from "react";
+import api from "@/api/axios";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -9,19 +9,19 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { toast } from '@/hooks/use-toast';
-import { Plus } from 'lucide-react';
+} from "@/components/ui/select";
+import { toast } from "@/hooks/use-toast";
+import { Plus } from "lucide-react";
 
 interface TambahAsetProps {
   onSuccess: () => void;
@@ -43,15 +43,16 @@ const TambahAset: React.FC<TambahAsetProps> = ({ onSuccess }) => {
   const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [masterAsetList, setMasterAsetList] = useState<MasterAset[]>([]);
+  const [isNamaAsetManual, setIsNamaAsetManual] = useState(false);
   const [formData, setFormData] = useState({
-    kode_aset: '',
-    nama_aset: '',
-    serial_number: '',
-    tanggal_pembelian: '',
-    harga_beli: '',
-    id_master_aset: '',
-    status_aset: 'tersedia',
-    aksesoris: '',
+    kode_aset: "",
+    nama_aset: "",
+    serial_number: "",
+    tanggal_pembelian: "",
+    harga_beli: "",
+    id_master_aset: "",
+    status_aset: "tersedia",
+    aksesoris: "",
   });
 
   useEffect(() => {
@@ -62,13 +63,13 @@ const TambahAset: React.FC<TambahAsetProps> = ({ onSuccess }) => {
 
   const fetchMasterAset = async () => {
     try {
-      const response = await api.get('/api/master-aset');
+      const response = await api.get("/api/master-aset");
       setMasterAsetList(response.data || []);
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: 'Failed to load master aset',
-        variant: 'destructive',
+        title: "Error",
+        description: "Failed to load master aset",
+        variant: "destructive",
       });
     }
   };
@@ -90,32 +91,32 @@ const TambahAset: React.FC<TambahAsetProps> = ({ onSuccess }) => {
         harga_beli: parseFloat(formData.harga_beli),
       };
 
-      await api.post('/api/aset', payload);
-      
+      await api.post("/api/aset", payload);
+
       toast({
-        title: 'Success',
-        description: 'Aset berhasil ditambahkan',
+        title: "Success",
+        description: "Aset berhasil ditambahkan",
       });
 
       setFormData({
-        kode_aset: '',
-        nama_aset: '',
-        serial_number: '',
-        tanggal_pembelian: '',
-        harga_beli: '',
-        id_master_aset: '',
-        status_aset: 'tersedia',
-        aksesoris: '',
+        kode_aset: "",
+        nama_aset: "",
+        serial_number: "",
+        tanggal_pembelian: "",
+        harga_beli: "",
+        id_master_aset: "",
+        status_aset: "tersedia",
+        aksesoris: "",
       });
-      
+
       setOpen(false);
       onSuccess();
     } catch (error: any) {
-      const message = error.response?.data?.error || 'Gagal menambahkan aset';
+      const message = error.response?.data?.error || "Gagal menambahkan aset";
       toast({
-        title: 'Error',
+        title: "Error",
         description: message,
-        variant: 'destructive',
+        variant: "destructive",
       });
     } finally {
       setIsLoading(false);
@@ -134,7 +135,9 @@ const TambahAset: React.FC<TambahAsetProps> = ({ onSuccess }) => {
       <DialogContent className="sm:max-w-[600px] w-[95vw] max-h-[90vh] overflow-y-auto">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle className="text-lg sm:text-xl">Tambah Aset</DialogTitle>
+            <DialogTitle className="text-lg sm:text-xl">
+              Tambah Aset
+            </DialogTitle>
             <DialogDescription className="text-xs sm:text-sm">
               Tambahkan aset baru ke dalam sistem
             </DialogDescription>
@@ -149,7 +152,7 @@ const TambahAset: React.FC<TambahAsetProps> = ({ onSuccess }) => {
                 <Input
                   id="kode_aset"
                   value={formData.kode_aset}
-                  onChange={(e) => handleChange('kode_aset', e.target.value)}
+                  onChange={(e) => handleChange("kode_aset", e.target.value)}
                   placeholder="AST-001"
                   required
                   className="text-sm"
@@ -163,10 +166,12 @@ const TambahAset: React.FC<TambahAsetProps> = ({ onSuccess }) => {
                 <Input
                   id="nama_aset"
                   value={formData.nama_aset}
-                  onChange={(e) => handleChange('nama_aset', e.target.value)}
+                  onChange={(e) => {
+                    setIsNamaAsetManual(true);
+                    handleChange("nama_aset", e.target.value);
+                  }}
                   placeholder="Laptop Dell"
                   required
-                  className="text-sm"
                 />
               </div>
             </div>
@@ -180,7 +185,9 @@ const TambahAset: React.FC<TambahAsetProps> = ({ onSuccess }) => {
                 <Input
                   id="serial_number"
                   value={formData.serial_number}
-                  onChange={(e) => handleChange('serial_number', e.target.value)}
+                  onChange={(e) =>
+                    handleChange("serial_number", e.target.value)
+                  }
                   placeholder="SN123456789"
                   required
                   className="text-sm font-mono"
@@ -193,19 +200,37 @@ const TambahAset: React.FC<TambahAsetProps> = ({ onSuccess }) => {
                 </Label>
                 <Select
                   value={formData.id_master_aset}
-                  onValueChange={(value) => handleChange('id_master_aset', value)}
+                  onValueChange={(value) => {
+                    handleChange("id_master_aset", value);
+
+                    if (!isNamaAsetManual) {
+                      const selected = masterAsetList.find(
+                        (m) => String(m.id_master_aset) === String(value),
+                      );
+
+                      if (selected) {
+                        const autoName = `${selected.nama_kategori} ${selected.nama_merek} ${selected.nama_tipe}`;
+                        handleChange("nama_aset", autoName);
+                      }
+                    }
+                  }}
                 >
                   <SelectTrigger className="text-sm">
                     <SelectValue placeholder="Pilih kategori" />
                   </SelectTrigger>
                   <SelectContent>
                     {masterAsetList.map((master) => (
-                      <SelectItem key={master.id_master_aset} value={master.id_master_aset} className="text-sm">
+                      <SelectItem
+                        key={master.id_master_aset}
+                        value={master.id_master_aset}
+                        className="text-sm"
+                      >
                         <span className="block sm:hidden">
                           {master.nama_kategori}
                         </span>
                         <span className="hidden sm:block">
-                          {master.nama_kategori} - {master.nama_merek} ({master.nama_tipe})
+                          {master.nama_kategori} - {master.nama_merek} (
+                          {master.nama_tipe})
                         </span>
                       </SelectItem>
                     ))}
@@ -227,7 +252,9 @@ const TambahAset: React.FC<TambahAsetProps> = ({ onSuccess }) => {
                   id="tanggal_pembelian"
                   type="date"
                   value={formData.tanggal_pembelian}
-                  onChange={(e) => handleChange('tanggal_pembelian', e.target.value)}
+                  onChange={(e) =>
+                    handleChange("tanggal_pembelian", e.target.value)
+                  }
                   required
                   className="text-sm"
                 />
@@ -241,7 +268,7 @@ const TambahAset: React.FC<TambahAsetProps> = ({ onSuccess }) => {
                   id="harga_beli"
                   type="number"
                   value={formData.harga_beli}
-                  onChange={(e) => handleChange('harga_beli', e.target.value)}
+                  onChange={(e) => handleChange("harga_beli", e.target.value)}
                   placeholder="15000000"
                   required
                   min="0"
@@ -257,16 +284,24 @@ const TambahAset: React.FC<TambahAsetProps> = ({ onSuccess }) => {
               </Label>
               <Select
                 value={formData.status_aset}
-                onValueChange={(value) => handleChange('status_aset', value)}
+                onValueChange={(value) => handleChange("status_aset", value)}
               >
                 <SelectTrigger className="text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="tersedia" className="text-sm">Tersedia</SelectItem>
-                  <SelectItem value="digunakan" className="text-sm">Digunakan</SelectItem>
-                  <SelectItem value="maintenance" className="text-sm">Maintenance</SelectItem>
-                  <SelectItem value="rusak" className="text-sm">Rusak</SelectItem>
+                  <SelectItem value="tersedia" className="text-sm">
+                    Tersedia
+                  </SelectItem>
+                  <SelectItem value="digunakan" className="text-sm">
+                    Digunakan
+                  </SelectItem>
+                  <SelectItem value="maintenance" className="text-sm">
+                    Maintenance
+                  </SelectItem>
+                  <SelectItem value="rusak" className="text-sm">
+                    Rusak
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -274,12 +309,15 @@ const TambahAset: React.FC<TambahAsetProps> = ({ onSuccess }) => {
             {/* Aksesoris - NEW FIELD */}
             <div className="grid gap-2">
               <Label htmlFor="aksesoris" className="text-sm">
-                Aksesoris <span className="text-xs text-muted-foreground">(Opsional)</span>
+                Aksesoris{" "}
+                <span className="text-xs text-muted-foreground">
+                  (Opsional)
+                </span>
               </Label>
               <Textarea
                 id="aksesoris"
                 value={formData.aksesoris}
-                onChange={(e) => handleChange('aksesoris', e.target.value)}
+                onChange={(e) => handleChange("aksesoris", e.target.value)}
                 placeholder="Contoh: CPU Intel i7, RAM 16GB DDR4, Mouse Logitech, Keyboard Mechanical"
                 rows={3}
                 className="text-sm resize-none"
@@ -299,12 +337,12 @@ const TambahAset: React.FC<TambahAsetProps> = ({ onSuccess }) => {
             >
               Batal
             </Button>
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               disabled={isLoading}
               className="w-full sm:w-auto order-1 sm:order-2"
             >
-              {isLoading ? 'Menyimpan...' : 'Tambah'}
+              {isLoading ? "Menyimpan..." : "Tambah"}
             </Button>
           </DialogFooter>
         </form>

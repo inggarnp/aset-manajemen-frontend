@@ -52,9 +52,42 @@ interface MasterAset {
   metode_penyusutan: string;
 }
 
+// Fungsi helper untuk konversi format tanggal
+const formatDateForInput = (dateString: string): string => {
+  if (!dateString) return '';
+  
+  try {
+    // Jika sudah format YYYY-MM-DD, return langsung
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      return dateString;
+    }
+    
+    // Jika format DD/MM/YYYY atau DD-MM-YYYY
+    if (/^\d{2}[/-]\d{2}[/-]\d{4}$/.test(dateString)) {
+      const parts = dateString.split(/[/-]/);
+      return `${parts[2]}-${parts[1]}-${parts[0]}`; // YYYY-MM-DD
+    }
+    
+    // Jika timestamp atau format lain, coba parse
+    const date = new Date(dateString);
+    if (!isNaN(date.getTime())) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  } catch (error) {
+    console.error('Error parsing date:', error);
+  }
+  
+  return '';
+};
+
 const EditAset: React.FC<EditAsetProps> = ({ aset, open, onOpenChange, onSuccess }) => {
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(false);
   const [masterAsetList, setMasterAsetList] = useState<MasterAset[]>([]);
+  
   const [formData, setFormData] = useState({
     kode_aset: '',
     nama_aset: '',
@@ -66,36 +99,62 @@ const EditAset: React.FC<EditAsetProps> = ({ aset, open, onOpenChange, onSuccess
     aksesoris: '',
   });
 
+  // Fetch master aset saat dialog dibuka
   useEffect(() => {
-    if (aset && open) {
-      setFormData({
-        kode_aset: aset.kode_aset,
-        nama_aset: aset.nama_aset,
-        serial_number: aset.serial_number,
-        tanggal_pembelian: aset.tanggal_pembelian,
-        harga_beli: aset.harga_beli.toString(),
-        id_master_aset: aset.id_master_aset,
-        status_aset: aset.status_aset,
-        aksesoris: aset.aksesoris || '',
-      });
+    if (open) {
+      console.log('Dialog opened, fetching master aset...');
       fetchMasterAset();
     }
-  }, [aset, open]);
+  }, [open]);
+
+  // Set form data SETELAH master aset loaded
+  useEffect(() => {
+    if (aset && open && masterAsetList.length > 0) {
+      console.log('Setting form data with aset:', aset);
+      console.log('Master aset list loaded:', masterAsetList.length, 'items');
+      
+      const formattedDate = formatDateForInput(aset.tanggal_pembelian);
+      console.log('Formatted date:', {
+        original: aset.tanggal_pembelian,
+        formatted: formattedDate,
+      });
+      
+      setFormData({
+        kode_aset: aset.kode_aset || '',
+        nama_aset: aset.nama_aset || '',
+        serial_number: aset.serial_number || '',
+        tanggal_pembelian: formattedDate,
+        harga_beli: aset.harga_beli?.toString() || '',
+        id_master_aset: aset.id_master_aset || '',
+        status_aset: aset.status_aset || '',
+        aksesoris: aset.aksesoris || '',
+      });
+
+      console.log('Form data set with id_master_aset:', aset.id_master_aset);
+    }
+  }, [aset, open, masterAsetList]);
 
   const fetchMasterAset = async () => {
+    setIsLoadingData(true);
     try {
+      console.log('Fetching master aset from API...');
       const response = await api.get('/api/master-aset');
+      console.log('Master aset response:', response.data);
       setMasterAsetList(response.data || []);
     } catch (error: any) {
+      console.error('Error fetching master aset:', error);
       toast({
         title: 'Error',
         description: 'Failed to load master aset',
         variant: 'destructive',
       });
+    } finally {
+      setIsLoadingData(false);
     }
   };
 
   const handleChange = (field: string, value: string) => {
+    console.log(`Field changed: ${field} = ${value}`);
     setFormData((prev) => ({
       ...prev,
       [field]: value,
@@ -114,6 +173,8 @@ const EditAset: React.FC<EditAsetProps> = ({ aset, open, onOpenChange, onSuccess
         harga_beli: parseFloat(formData.harga_beli),
       };
 
+      console.log('Submitting payload:', payload);
+
       await api.put(`/api/aset/${aset.id_aset}`, payload);
       
       toast({
@@ -124,6 +185,7 @@ const EditAset: React.FC<EditAsetProps> = ({ aset, open, onOpenChange, onSuccess
       onOpenChange(false);
       onSuccess();
     } catch (error: any) {
+      console.error('Error updating aset:', error);
       const message = error.response?.data?.error || 'Gagal mengupdate aset';
       toast({
         title: 'Error',
@@ -134,6 +196,9 @@ const EditAset: React.FC<EditAsetProps> = ({ aset, open, onOpenChange, onSuccess
       setIsLoading(false);
     }
   };
+
+  // Get selected master aset for display
+  const selectedMasterAset = masterAsetList.find(m => m.id_master_aset === formData.id_master_aset);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -146,152 +211,177 @@ const EditAset: React.FC<EditAsetProps> = ({ aset, open, onOpenChange, onSuccess
             </DialogDescription>
           </DialogHeader>
           
-          <div className="grid gap-3 sm:gap-4 py-3 sm:py-4">
-            {/* Kode & Nama */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="kode_aset" className="text-sm">
-                  Kode Aset <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="kode_aset"
-                  value={formData.kode_aset}
-                  onChange={(e) => handleChange('kode_aset', e.target.value)}
-                  required
-                  className="text-sm"
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="nama_aset" className="text-sm">
-                  Nama Aset <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="nama_aset"
-                  value={formData.nama_aset}
-                  onChange={(e) => handleChange('nama_aset', e.target.value)}
-                  required
-                  className="text-sm"
-                />
-              </div>
+          {isLoadingData ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              Loading data...
             </div>
+          ) : (
+            <div className="grid gap-3 sm:gap-4 py-3 sm:py-4">
+              {/* Kode & Nama */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="kode_aset" className="text-sm">
+                    Kode Aset <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="kode_aset"
+                    value={formData.kode_aset}
+                    onChange={(e) => handleChange('kode_aset', e.target.value)}
+                    required
+                    disabled={isLoading}
+                    className="text-sm"
+                  />
+                </div>
 
-            {/* Serial & Kategori */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="serial_number" className="text-sm">
-                  Serial Number <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="serial_number"
-                  value={formData.serial_number}
-                  onChange={(e) => handleChange('serial_number', e.target.value)}
-                  required
-                  className="text-sm font-mono"
-                />
+                <div className="grid gap-2">
+                  <Label htmlFor="nama_aset" className="text-sm">
+                    Nama Aset <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="nama_aset"
+                    value={formData.nama_aset}
+                    onChange={(e) => handleChange('nama_aset', e.target.value)}
+                    required
+                    disabled={isLoading}
+                    className="text-sm"
+                  />
+                </div>
               </div>
 
+              {/* Serial & Kategori */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="serial_number" className="text-sm">
+                    Serial Number <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="serial_number"
+                    value={formData.serial_number}
+                    onChange={(e) => handleChange('serial_number', e.target.value)}
+                    required
+                    disabled={isLoading}
+                    className="text-sm font-mono"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="id_master_aset" className="text-sm">
+                    Kategori Aset <span className="text-red-500">*</span>
+                  </Label>
+                  <Select
+                    value={formData.id_master_aset}
+                    onValueChange={(value) => handleChange('id_master_aset', value)}
+                    disabled={isLoading}
+                  >
+                    <SelectTrigger className="text-sm">
+                      <SelectValue placeholder="Pilih kategori...">
+                        {selectedMasterAset ? (
+                          <span className="block sm:hidden">
+                            {selectedMasterAset.nama_kategori}
+                          </span>
+                        ) : null}
+                        {selectedMasterAset ? (
+                          <span className="hidden sm:block">
+                            {selectedMasterAset.nama_kategori} - {selectedMasterAset.nama_merek} ({selectedMasterAset.nama_tipe})
+                          </span>
+                        ) : null}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {masterAsetList.map((master) => (
+                        <SelectItem key={master.id_master_aset} value={master.id_master_aset} className="text-sm">
+                          <span className="block sm:hidden">
+                            {master.nama_kategori}
+                          </span>
+                          <span className="hidden sm:block">
+                            {master.nama_kategori} - {master.nama_merek} ({master.nama_tipe})
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Pilih kombinasi kategori, merek, dan tipe aset
+                  </p>
+                </div>
+              </div>
+
+              {/* Tanggal & Harga */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="tanggal_pembelian" className="text-sm">
+                    Tanggal Pembelian <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="tanggal_pembelian"
+                    type="date"
+                    value={formData.tanggal_pembelian}
+                    onChange={(e) => handleChange('tanggal_pembelian', e.target.value)}
+                    required
+                    disabled={isLoading}
+                    className="text-sm"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="harga_beli" className="text-sm">
+                    Harga Beli <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="harga_beli"
+                    type="number"
+                    value={formData.harga_beli}
+                    onChange={(e) => handleChange('harga_beli', e.target.value)}
+                    required
+                    disabled={isLoading}
+                    min="0"
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Status */}
               <div className="grid gap-2">
-                <Label htmlFor="id_master_aset" className="text-sm">
-                  Kategori Aset <span className="text-red-500">*</span>
+                <Label htmlFor="status_aset" className="text-sm">
+                  Status Aset <span className="text-red-500">*</span>
                 </Label>
                 <Select
-                  value={formData.id_master_aset}
-                  onValueChange={(value) => handleChange('id_master_aset', value)}
+                  value={formData.status_aset}
+                  onValueChange={(value) => handleChange('status_aset', value)}
+                  disabled={isLoading}
                 >
                   <SelectTrigger className="text-sm">
-                    <SelectValue />
+                    <SelectValue placeholder="Pilih status..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {masterAsetList.map((master) => (
-                      <SelectItem key={master.id_master_aset} value={master.id_master_aset} className="text-sm">
-                        <span className="block sm:hidden">
-                          {master.nama_kategori}
-                        </span>
-                        <span className="hidden sm:block">
-                          {master.nama_kategori} - {master.nama_merek} ({master.nama_tipe})
-                        </span>
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="tersedia" className="text-sm">Tersedia</SelectItem>
+                    <SelectItem value="digunakan" className="text-sm">Digunakan</SelectItem>
+                    <SelectItem value="maintenance" className="text-sm">Maintenance</SelectItem>
+                    <SelectItem value="rusak" className="text-sm">Rusak</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Aksesoris */}
+              <div className="grid gap-2">
+                <Label htmlFor="aksesoris" className="text-sm">
+                  Aksesoris <span className="text-xs text-muted-foreground">(Opsional)</span>
+                </Label>
+                <Textarea
+                  id="aksesoris"
+                  value={formData.aksesoris}
+                  onChange={(e) => handleChange('aksesoris', e.target.value)}
+                  placeholder="Contoh: CPU Intel i7, RAM 16GB DDR4, Mouse Logitech, Keyboard Mechanical"
+                  disabled={isLoading}
+                  rows={3}
+                  className="text-sm resize-none"
+                />
                 <p className="text-xs text-muted-foreground">
-                  Pilih kombinasi kategori, merek, dan tipe aset
+                  Tuliskan kelengkapan aset seperti CPU, RAM, keyboard, mouse, dll
                 </p>
               </div>
             </div>
-
-            {/* Tanggal & Harga */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="tanggal_pembelian" className="text-sm">
-                  Tanggal Pembelian <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="tanggal_pembelian"
-                  type="date"
-                  value={formData.tanggal_pembelian}
-                  onChange={(e) => handleChange('tanggal_pembelian', e.target.value)}
-                  required
-                  className="text-sm"
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="harga_beli" className="text-sm">
-                  Harga Beli <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="harga_beli"
-                  type="number"
-                  value={formData.harga_beli}
-                  onChange={(e) => handleChange('harga_beli', e.target.value)}
-                  required
-                  min="0"
-                  className="text-sm"
-                />
-              </div>
-            </div>
-
-            {/* Status */}
-            <div className="grid gap-2">
-              <Label htmlFor="status_aset" className="text-sm">
-                Status Aset <span className="text-red-500">*</span>
-              </Label>
-              <Select
-                value={formData.status_aset}
-                onValueChange={(value) => handleChange('status_aset', value)}
-              >
-                <SelectTrigger className="text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="tersedia" className="text-sm">Tersedia</SelectItem>
-                  <SelectItem value="digunakan" className="text-sm">Digunakan</SelectItem>
-                  <SelectItem value="maintenance" className="text-sm">Maintenance</SelectItem>
-                  <SelectItem value="rusak" className="text-sm">Rusak</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Aksesoris - NEW FIELD */}
-            <div className="grid gap-2">
-              <Label htmlFor="aksesoris" className="text-sm">
-                Aksesoris <span className="text-xs text-muted-foreground">(Opsional)</span>
-              </Label>
-              <Textarea
-                id="aksesoris"
-                value={formData.aksesoris}
-                onChange={(e) => handleChange('aksesoris', e.target.value)}
-                placeholder="Contoh: CPU Intel i7, RAM 16GB DDR4, Mouse Logitech, Keyboard Mechanical"
-                rows={3}
-                className="text-sm resize-none"
-              />
-              <p className="text-xs text-muted-foreground">
-                Tuliskan kelengkapan aset seperti CPU, RAM, keyboard, mouse, dll
-              </p>
-            </div>
-          </div>
+          )}
 
           <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
             <Button
@@ -305,7 +395,7 @@ const EditAset: React.FC<EditAsetProps> = ({ aset, open, onOpenChange, onSuccess
             </Button>
             <Button 
               type="submit" 
-              disabled={isLoading}
+              disabled={isLoading || isLoadingData}
               className="w-full sm:w-auto order-1 sm:order-2"
             >
               {isLoading ? 'Menyimpan...' : 'Update'}

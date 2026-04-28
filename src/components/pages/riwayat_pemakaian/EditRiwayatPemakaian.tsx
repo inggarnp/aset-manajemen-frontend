@@ -59,6 +59,29 @@ const KONDISI_OPTIONS = [
   { value: 'Rusak Berat', label: 'Rusak Berat' },
 ];
 
+const formatDateForInput = (dateString: string | null): string => {
+  if (!dateString) return '';
+  
+  try {
+    const date = new Date(dateString);
+    
+    if (isNaN(date.getTime())) {
+      console.error('Invalid date:', dateString);
+      return '';
+    }
+    
+    // Convert to YYYY-MM-DD format for input[type="date"]
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}`;
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return '';
+  }
+};
+
 const EditRiwayatPemakaian: React.FC<EditRiwayatPemakaianProps> = ({ 
   riwayat, 
   open, 
@@ -66,6 +89,7 @@ const EditRiwayatPemakaian: React.FC<EditRiwayatPemakaianProps> = ({
   onSuccess 
 }) => {
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(false);
   const [asetList, setAsetList] = useState<Aset[]>([]);
   const [userList, setUserList] = useState<User[]>([]);
   const [dateError, setDateError] = useState('');
@@ -81,22 +105,40 @@ const EditRiwayatPemakaian: React.FC<EditRiwayatPemakaianProps> = ({
   });
 
   useEffect(() => {
-    if (riwayat && open) {
+    if (open) {
+      console.log('Dialog opened, fetching dropdown data...');
+      fetchDropdownData();
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (riwayat && open && asetList.length > 0 && userList.length > 0) {
+      console.log('Setting form data with riwayat:', riwayat);
+      
+      const tanggalMulai = formatDateForInput(riwayat.tanggal_mulai_pakai);
+      const tanggalSelesai = formatDateForInput(riwayat.tanggal_selesai_pakai);
+      
+      console.log('Formatted dates:', {
+        original_mulai: riwayat.tanggal_mulai_pakai,
+        formatted_mulai: tanggalMulai,
+        original_selesai: riwayat.tanggal_selesai_pakai,
+        formatted_selesai: tanggalSelesai,
+      });
+
       setFormData({
         id_aset: riwayat.id_aset,
         id_user: riwayat.id_user,
-        tanggal_mulai_pakai: riwayat.tanggal_mulai_pakai,
-        tanggal_selesai_pakai: riwayat.tanggal_selesai_pakai || '',
+        tanggal_mulai_pakai: tanggalMulai,
+        tanggal_selesai_pakai: tanggalSelesai,
         lokasi_pemakaian: riwayat.lokasi_pemakaian,
         kondisi_aset: riwayat.kondisi_aset,
         keterangan: riwayat.keterangan,
       });
-      fetchDropdownData();
+      
       setDateError('');
     }
-  }, [riwayat, open]);
+  }, [riwayat, open, asetList, userList]);
 
-  // Validate dates whenever they change
   useEffect(() => {
     if (formData.tanggal_mulai_pakai && formData.tanggal_selesai_pakai) {
       const startDate = new Date(formData.tanggal_mulai_pakai);
@@ -113,24 +155,34 @@ const EditRiwayatPemakaian: React.FC<EditRiwayatPemakaianProps> = ({
   }, [formData.tanggal_mulai_pakai, formData.tanggal_selesai_pakai]);
 
   const fetchDropdownData = async () => {
+    setIsLoadingData(true);
     try {
+      console.log('Fetching aset and user data...');
+      
       const [asetRes, userRes] = await Promise.all([
         api.get('/api/aset'),
         api.get('/api/users'),
       ]);
 
+      console.log('Aset data:', asetRes.data);
+      console.log('User data:', userRes.data);
+
       setAsetList(asetRes.data);
       setUserList(userRes.data);
     } catch (error: any) {
+      console.error('Failed to fetch dropdown data:', error);
       toast({
         title: 'Error',
         description: 'Failed to load form data',
         variant: 'destructive',
       });
+    } finally {
+      setIsLoadingData(false);
     }
   };
 
   const handleInputChange = (field: string, value: string) => {
+    console.log(`Field changed: ${field} = ${value}`);
     setFormData((prev) => ({
       ...prev,
       [field]: value,
@@ -163,6 +215,8 @@ const EditRiwayatPemakaian: React.FC<EditRiwayatPemakaianProps> = ({
         keterangan: formData.keterangan.trim(),
       };
 
+      console.log('Submitting payload:', payload);
+
       await api.put(`/api/riwayat-pemakaian/${riwayat.id_riwayat}`, payload);
 
       toast({
@@ -173,6 +227,7 @@ const EditRiwayatPemakaian: React.FC<EditRiwayatPemakaianProps> = ({
       onOpenChange(false);
       onSuccess();
     } catch (error: any) {
+      console.error('Failed to update:', error);
       const message = error.response?.data?.error || 'Gagal mengupdate riwayat pemakaian';
       toast({
         title: 'Error',
@@ -183,6 +238,9 @@ const EditRiwayatPemakaian: React.FC<EditRiwayatPemakaianProps> = ({
       setIsLoading(false);
     }
   };
+
+  const selectedAset = asetList.find(a => a.id_aset === formData.id_aset);
+  const selectedUser = userList.find(u => u.id_user === formData.id_user);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -195,156 +253,176 @@ const EditRiwayatPemakaian: React.FC<EditRiwayatPemakaianProps> = ({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-3 sm:gap-4 py-3 sm:py-4">
-            {/* Aset */}
-            <div className="grid gap-2">
-              <Label htmlFor="id_aset" className="text-sm">
-                Aset <span className="text-red-500">*</span>
-              </Label>
-              <Select
-                value={formData.id_aset}
-                onValueChange={(value) => handleInputChange('id_aset', value)}
-                disabled={isLoading}
-              >
-                <SelectTrigger className="text-sm">
-                  <SelectValue placeholder="Pilih aset" />
-                </SelectTrigger>
-                <SelectContent>
-                  {asetList.map((aset) => (
-                    <SelectItem key={aset.id_aset} value={aset.id_aset} className="text-sm">
-                      <span className="block sm:hidden">{aset.nama_aset}</span>
-                      <span className="hidden sm:block">{aset.kode_aset} - {aset.nama_aset}</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          {isLoadingData ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              Loading data...
             </div>
-
-            {/* User */}
-            <div className="grid gap-2">
-              <Label htmlFor="id_user" className="text-sm">
-                User <span className="text-red-500">*</span>
-              </Label>
-              <Select
-                value={formData.id_user}
-                onValueChange={(value) => handleInputChange('id_user', value)}
-                disabled={isLoading}
-              >
-                <SelectTrigger className="text-sm">
-                  <SelectValue placeholder="Pilih user" />
-                </SelectTrigger>
-                <SelectContent>
-                  {userList.map((user) => (
-                    <SelectItem key={user.id_user} value={user.id_user} className="text-sm">
-                      <span className="block sm:hidden">{user.nama_user}</span>
-                      <span className="hidden sm:block">{user.nama_user} ({user.email})</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Tanggal Mulai & Selesai - Responsive Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-              {/* Tanggal Mulai Pakai */}
+          ) : (
+            <div className="grid gap-3 sm:gap-4 py-3 sm:py-4">
+              {/* Aset */}
               <div className="grid gap-2">
-                <Label htmlFor="tanggal_mulai_pakai" className="text-sm">
-                  Tanggal Mulai <span className="text-red-500">*</span>
+                <Label htmlFor="id_aset" className="text-sm">
+                  Aset <span className="text-red-500">*</span>
+                </Label>
+                <Select
+                  value={formData.id_aset}
+                  onValueChange={(value) => handleInputChange('id_aset', value)}
+                  disabled={isLoading}
+                >
+                  <SelectTrigger className="text-sm">
+                    <SelectValue placeholder="Pilih aset">
+                      {selectedAset ? (
+                        <span className="block sm:hidden">{selectedAset.nama_aset}</span>
+                      ) : null}
+                      {selectedAset ? (
+                        <span className="hidden sm:block">{selectedAset.kode_aset} - {selectedAset.nama_aset}</span>
+                      ) : null}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {asetList.map((aset) => (
+                      <SelectItem key={aset.id_aset} value={aset.id_aset} className="text-sm">
+                        <span className="block sm:hidden">{aset.nama_aset}</span>
+                        <span className="hidden sm:block">{aset.kode_aset} - {aset.nama_aset}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* User */}
+              <div className="grid gap-2">
+                <Label htmlFor="id_user" className="text-sm">
+                  User <span className="text-red-500">*</span>
+                </Label>
+                <Select
+                  value={formData.id_user}
+                  onValueChange={(value) => handleInputChange('id_user', value)}
+                  disabled={isLoading}
+                >
+                  <SelectTrigger className="text-sm">
+                    <SelectValue placeholder="Pilih user">
+                      {selectedUser ? (
+                        <span className="block sm:hidden">{selectedUser.nama_user}</span>
+                      ) : null}
+                      {selectedUser ? (
+                        <span className="hidden sm:block">{selectedUser.nama_user} ({selectedUser.email})</span>
+                      ) : null}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {userList.map((user) => (
+                      <SelectItem key={user.id_user} value={user.id_user} className="text-sm">
+                        <span className="block sm:hidden">{user.nama_user}</span>
+                        <span className="hidden sm:block">{user.nama_user} ({user.email})</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Tanggal Mulai & Selesai - Responsive Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                {/* Tanggal Mulai Pakai */}
+                <div className="grid gap-2">
+                  <Label htmlFor="tanggal_mulai_pakai" className="text-sm">
+                    Tanggal Mulai <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="tanggal_mulai_pakai"
+                    type="date"
+                    value={formData.tanggal_mulai_pakai}
+                    onChange={(e) => handleInputChange('tanggal_mulai_pakai', e.target.value)}
+                    required
+                    disabled={isLoading}
+                    className="text-sm"
+                  />
+                </div>
+
+                {/* Tanggal Selesai Pakai */}
+                <div className="grid gap-2">
+                  <Label htmlFor="tanggal_selesai_pakai" className="text-sm">
+                    Tanggal Selesai <span className="text-xs text-muted-foreground">(Opsional)</span>
+                  </Label>
+                  <Input
+                    id="tanggal_selesai_pakai"
+                    type="date"
+                    value={formData.tanggal_selesai_pakai}
+                    onChange={(e) => handleInputChange('tanggal_selesai_pakai', e.target.value)}
+                    disabled={isLoading}
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Date Error Alert */}
+              {dateError && (
+                <Alert variant="destructive" className="text-xs sm:text-sm">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{dateError}</AlertDescription>
+                </Alert>
+              )}
+
+              <p className="text-xs text-muted-foreground -mt-1 sm:-mt-2">
+                💡 Kosongkan tanggal selesai jika aset masih digunakan. Sistem akan mencegah duplikasi periode penggunaan aset yang sama.
+              </p>
+
+              {/* Lokasi Pemakaian */}
+              <div className="grid gap-2">
+                <Label htmlFor="lokasi_pemakaian" className="text-sm">
+                  Lokasi Pemakaian <span className="text-red-500">*</span>
                 </Label>
                 <Input
-                  id="tanggal_mulai_pakai"
-                  type="date"
-                  value={formData.tanggal_mulai_pakai}
-                  onChange={(e) => handleInputChange('tanggal_mulai_pakai', e.target.value)}
+                  id="lokasi_pemakaian"
+                  value={formData.lokasi_pemakaian}
+                  onChange={(e) => handleInputChange('lokasi_pemakaian', e.target.value)}
+                  placeholder="Contoh: Ruang IT Lantai 3"
                   required
                   disabled={isLoading}
                   className="text-sm"
                 />
               </div>
 
-              {/* Tanggal Selesai Pakai */}
+              {/* Kondisi Aset */}
               <div className="grid gap-2">
-                <Label htmlFor="tanggal_selesai_pakai" className="text-sm">
-                  Tanggal Selesai <span className="text-xs text-muted-foreground">(Opsional)</span>
+                <Label htmlFor="kondisi_aset" className="text-sm">
+                  Kondisi Aset <span className="text-red-500">*</span>
                 </Label>
-                <Input
-                  id="tanggal_selesai_pakai"
-                  type="date"
-                  value={formData.tanggal_selesai_pakai}
-                  onChange={(e) => handleInputChange('tanggal_selesai_pakai', e.target.value)}
+                <Select
+                  value={formData.kondisi_aset}
+                  onValueChange={(value) => handleInputChange('kondisi_aset', value)}
                   disabled={isLoading}
-                  className="text-sm"
+                >
+                  <SelectTrigger className="text-sm">
+                    <SelectValue placeholder="Pilih kondisi" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {KONDISI_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value} className="text-sm">
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Keterangan */}
+              <div className="grid gap-2">
+                <Label htmlFor="keterangan" className="text-sm">
+                  Keterangan <span className="text-xs text-muted-foreground">(Opsional)</span>
+                </Label>
+                <Textarea
+                  id="keterangan"
+                  value={formData.keterangan}
+                  onChange={(e) => handleInputChange('keterangan', e.target.value)}
+                  placeholder="Catatan tambahan"
+                  disabled={isLoading}
+                  rows={3}
+                  className="text-sm resize-none"
                 />
               </div>
             </div>
-
-            {/* Date Error Alert */}
-            {dateError && (
-              <Alert variant="destructive" className="text-xs sm:text-sm">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{dateError}</AlertDescription>
-              </Alert>
-            )}
-
-            <p className="text-xs text-muted-foreground -mt-1 sm:-mt-2">
-              💡 Kosongkan tanggal selesai jika aset masih digunakan. Sistem akan mencegah duplikasi periode penggunaan aset yang sama.
-            </p>
-
-            {/* Lokasi Pemakaian */}
-            <div className="grid gap-2">
-              <Label htmlFor="lokasi_pemakaian" className="text-sm">
-                Lokasi Pemakaian <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="lokasi_pemakaian"
-                value={formData.lokasi_pemakaian}
-                onChange={(e) => handleInputChange('lokasi_pemakaian', e.target.value)}
-                placeholder="Contoh: Ruang IT Lantai 3"
-                required
-                disabled={isLoading}
-                className="text-sm"
-              />
-            </div>
-
-            {/* Kondisi Aset */}
-            <div className="grid gap-2">
-              <Label htmlFor="kondisi_aset" className="text-sm">
-                Kondisi Aset <span className="text-red-500">*</span>
-              </Label>
-              <Select
-                value={formData.kondisi_aset}
-                onValueChange={(value) => handleInputChange('kondisi_aset', value)}
-                disabled={isLoading}
-              >
-                <SelectTrigger className="text-sm">
-                  <SelectValue placeholder="Pilih kondisi" />
-                </SelectTrigger>
-                <SelectContent>
-                  {KONDISI_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value} className="text-sm">
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Keterangan */}
-            <div className="grid gap-2">
-              <Label htmlFor="keterangan" className="text-sm">
-                Keterangan <span className="text-xs text-muted-foreground">(Opsional)</span>
-              </Label>
-              <Textarea
-                id="keterangan"
-                value={formData.keterangan}
-                onChange={(e) => handleInputChange('keterangan', e.target.value)}
-                placeholder="Catatan tambahan"
-                disabled={isLoading}
-                rows={3}
-                className="text-sm resize-none"
-              />
-            </div>
-          </div>
+          )}
 
           <DialogFooter className="gap-2 sm:gap-0 flex-col-reverse sm:flex-row">
             <Button
@@ -358,7 +436,7 @@ const EditRiwayatPemakaian: React.FC<EditRiwayatPemakaianProps> = ({
             </Button>
             <Button 
               type="submit" 
-              disabled={isLoading || !!dateError} 
+              disabled={isLoading || isLoadingData || !!dateError} 
               className="w-full sm:w-auto"
             >
               {isLoading ? 'Menyimpan...' : 'Update'}

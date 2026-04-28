@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/auth/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,15 +15,19 @@ import {
   Save,
   X,
   Edit2,
-  CheckCircle2
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { toast } from '@/hooks/use-toast';
+import api from '@/api/axios';
 
 const Profile: React.FC = () => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
   
   const [formData, setFormData] = useState({
     nama_user: user?.nama_user || '',
@@ -32,6 +36,16 @@ const Profile: React.FC = () => {
     newPassword: '',
     confirmPassword: '',
   });
+
+  useEffect(() => {
+    if (user) {
+      setFormData(prev => ({
+        ...prev,
+        nama_user: user.nama_user || '',
+        email: user.email || '',
+      }));
+    }
+  }, [user]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -43,47 +57,107 @@ const Profile: React.FC = () => {
   const handleSaveProfile = async () => {
     setSaving(true);
     setSuccessMessage('');
+    setErrorMessage('');
     
     try {
-      // TODO: Implement API call to update profile
-      // await api.put('/api/users/profile', {
-      //   nama_user: formData.nama_user,
-      //   email: formData.email,
-      // });
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log('Updating profile...', {
+        nama_user: formData.nama_user,
+        email: formData.email,
+      });
+
+      const response = await api.put('/api/profile', {
+        nama_user: formData.nama_user,
+        email: formData.email,
+      });
+
+      console.log('Profile updated:', response.data);
       
       setSuccessMessage('Profile updated successfully!');
       setIsEditing(false);
       
-      // Clear success message after 3 seconds
+      toast({
+        title: "Success",
+        description: "Profile updated successfully!",
+      });
+
+      console.log('Refreshing user data...');
+      await refreshUser();
+      
       setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to update profile:', error);
+      console.error('Error details:', {
+        status: error.response?.status,
+        data: error.response?.data,
+      });
+      
+      const message = error.response?.data?.error || 'Failed to update profile. Please try again.';
+      setErrorMessage(message);
+      
+      toast({
+        title: "Error",
+        description: message,
+        variant: "destructive",
+      });
+
+      setTimeout(() => setErrorMessage(''), 5000);
     } finally {
       setSaving(false);
     }
   };
 
   const handleChangePassword = async () => {
+    // Validation
+    if (!formData.currentPassword.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter your current password",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!formData.newPassword.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter a new password",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (formData.newPassword.length < 6) {
+      toast({
+        title: "Validation Error",
+        description: "New password must be at least 6 characters",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (formData.newPassword !== formData.confirmPassword) {
-      alert('New password and confirmation do not match!');
+      toast({
+        title: "Validation Error",
+        description: "New password and confirmation do not match!",
+        variant: "destructive",
+      });
       return;
     }
 
     setSaving(true);
     setSuccessMessage('');
+    setErrorMessage('');
     
     try {
-      // TODO: Implement API call to change password
-      // await api.put('/api/users/change-password', {
-      //   currentPassword: formData.currentPassword,
-      //   newPassword: formData.newPassword,
-      // });
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log('Changing password...');
+
+      const response = await api.put('/api/profile/password', {
+        current_password: formData.currentPassword,
+        new_password: formData.newPassword,
+        confirm_password: formData.confirmPassword,
+      });
+
+      console.log('Password changed:', response.data);
       
       setSuccessMessage('Password changed successfully!');
       setFormData({
@@ -93,9 +167,29 @@ const Profile: React.FC = () => {
         confirmPassword: '',
       });
       
+      toast({
+        title: "Success",
+        description: "Password changed successfully!",
+      });
+      
       setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to change password:', error);
+      console.error('Error details:', {
+        status: error.response?.status,
+        data: error.response?.data,
+      });
+      
+      const message = error.response?.data?.error || 'Failed to change password. Please try again.';
+      setErrorMessage(message);
+      
+      toast({
+        title: "Error",
+        description: message,
+        variant: "destructive",
+      });
+
+      setTimeout(() => setErrorMessage(''), 5000);
     } finally {
       setSaving(false);
     }
@@ -110,6 +204,7 @@ const Profile: React.FC = () => {
       confirmPassword: '',
     });
     setIsEditing(false);
+    setErrorMessage('');
   };
 
   return (
@@ -128,6 +223,16 @@ const Profile: React.FC = () => {
           <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
           <AlertDescription className="text-green-800 dark:text-green-200">
             {successMessage}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Error Message */}
+      {errorMessage && (
+        <Alert className="bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800">
+          <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+          <AlertDescription className="text-red-800 dark:text-red-200">
+            {errorMessage}
           </AlertDescription>
         </Alert>
       )}
@@ -279,7 +384,7 @@ const Profile: React.FC = () => {
               type="password"
               value={formData.newPassword}
               onChange={handleInputChange}
-              placeholder="Enter new password"
+              placeholder="Enter new password (min. 6 characters)"
             />
           </div>
 
